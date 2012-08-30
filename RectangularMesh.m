@@ -6,7 +6,7 @@
 % Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
 % Neither the name of the Washington University in Saint Louis nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
 % THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
+% Comments: Mikhail Milchenko, mmilch@npg.wustl.edu, Washington University School of Medicine. 
 % Mask: binary mask of VOI
 % thickness: level depth
 % step: partition step
@@ -15,7 +15,7 @@
 % nm: strel size in pix/mm for morphology operations (~2pix for 1x1x1 mm)
 
 function[faces_o, vertices_o, faces_b, vertices_b, faces_t,vertices_t,...
-lower_surf,upper_surf,orig_surf]=RectangularMesh(Mask,thickness,step,thresh,ac,nm,opt)
+lower_surf,upper_surf,orig_surf]=RectangularMesh(root,Mask,thickness,step,thresh,ac,nm,opt)
 
 LEFT=1;TOP=2;RIGHT=4;BOTTOM=8;
 
@@ -65,8 +65,11 @@ end;
 %improve coverage of the upper surface.
 [vertices Mask1]=inflate_surf(vertices,dx,dy,Mask2,opt);
 if(opt>1)
-saveVol(double(Mask1),'intersect_layer');
+saveVol(double(Mask1),[root '_intersect_layer']);
+Mask1=raster_layer(vertices,dx,dy,Mask2);
+saveVol(double(Mask1),[root '_raster_layer']);
 end;
+
 %C=calc_curvature(vertices,dx,dy);
 
 for x=1:dx+1
@@ -138,6 +141,28 @@ function [a]=ang(v0,v1,v2)
 a1=v1.xb-v0.xb; a2=v2.xb-v0.xb;
 if(norm(a1)==0 || norm(a2)==0) a=1;
 else a=abs(dot(a1,a2)/(norm(a1)*norm(a2)));
+end;
+return;
+
+function [Mask1]=raster_layer(vertices,dx,dy,Mask)
+Mask1=zeros(size(Mask));
+Maskz=zeros(size(Mask));
+for x=1:dx
+for y=1:dy
+if(vertices(x,y,:).empty()~=1)
+vert0=vertices(x,y);
+vertr=vertices(x+1,y);
+vertb=vertices(x,y+1);
+vertbr=vertices(x+1,y+1);
+[r Mask1]=triatest(vert0.xt,vertr.xt,vertbr.xt,Maskz,Mask1,4);
+[r Mask1]=triatest(vert0.x,vertr.x,vertbr.x,Maskz,Mask1,3);
+[r Mask1]=triatest(vert0.xb,vertr.xb,vertbr.xb,Maskz,Mask1,2);
+
+[r Mask1]=triatest(vert0.xt,vertb.xt,vertbr.xt,Maskz,Mask1,4);
+[r Mask1]=triatest(vert0.x,vertb.x,vertbr.x,Maskz,Mask1,3);
+[r Mask1]=triatest(vert0.xb,vertb.xb,vertbr.xb,Maskz,Mask1,2);
+end;
+end;
 end;
 return;
 
@@ -232,12 +257,12 @@ x=int16(round(x0+dv*l));
 if(sum(x<=0)>0) continue; end;
 if(sum(x>sz)>0) continue; end;
 if(opt>1)
-Mask1(x(1),x(2),x(3))=1;
+Mask1(x(1),x(2),x(3))=opt;
 end;
 if (Mask(x(1),x(2),x(3)) ~= 0) 
 res=1;
 if(opt>1)
-Mask1(x(1),x(2),x(3))=5; 
+Mask1(x(1),x(2),x(3))=opt; 
 end;
 if(opt<2) return; end;
 end

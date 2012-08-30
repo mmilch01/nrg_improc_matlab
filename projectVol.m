@@ -6,6 +6,9 @@
 % Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
 % Neither the name of the Washington University in Saint Louis nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
 % THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+% Author: Mikhail Milchenko, mmilch@npg.wustl.edu, Washington University School of Medicine. 
+% Warranty: No express or implied warranty, or fitness of this code for specific purpose is assumed. 
+% License: You are free to use and re-distribute this code in any form, preserving the above notice.
 
 function[Vres, Vmask]=projectVol(V,V_orig,surf,lower_surf,upper_surf,thickness,step,dir,opt)
 [wx,wy,wz]=size(V_orig);
@@ -13,6 +16,7 @@ sz=size(V_orig);
 %step=thickness*2;
 dx=floor((wx-1)/step);
 dy=floor((wy-1)/step);
+%global last_tetr;
 
 %project bounded subvolume from original volume to result volume
 if(strcmp(dir,'direct')~=0) 
@@ -88,13 +92,15 @@ pmin=round(min(sz,max([1,1,1],min(pmin1,pmin2))));
 pmax=round(max([1,1,1],min(sz,max(pmax1,pmax2))));
 
 %main cycle.
+t=1;
 for zz=pmin(3):pmax(3)
 for yy=pmin(2):pmax(2)
 for xx=pmin(1):pmax(1)
 pt=[xx,yy,zz];%-[1,1,1]; 
-t=get_containing_tetrahedron(pt,tetra_new);
+t=get_containing_tetrahedron(pt,tetra_new,t);
 if(t<1)
 % if(Vmask(xx,yy,zz)==0); Vmask(xx,yy,zz)=5; end;
+t=1;
 continue;
 end;
 x_old=round(coord_transform(pt,tetra_new(t),tetra_old(t)));
@@ -221,13 +227,14 @@ pmin=round(min(sz,max([1,1,1],min(pmin1,pmin2))));
 pmax=round(max([1,1,1],min(sz,max(pmax1,pmax2))));
 
 %main cycle.
-
+t=1;
 for z=pmin(3):pmax(3)
 for y=pmin(2):pmax(2)
 for x=pmin(1):pmax(1)
 pt=[x,y,z];%-[1,1,1]; 
-t=get_containing_tetrahedron(pt,tetra_new);
+t=get_containing_tetrahedron(pt,tetra_new,t);
 if(t<1)
+t=1;
 if(Vmask(x,y,z)==0); Vmask(x,y,z)=5; end;
 continue;
 end;
@@ -266,13 +273,14 @@ Vmask=0*Vres;
 bound_low=[orig(1),orig(2),1];
 bound_high=bound_low+[step,step,nzmax];
 %main cycle.
-
+t=1;
 for z=1:mx(3)
 for y=1:mx(2)
 for x=1:mx(1)
 pt=[x,y,z]+btl_l-[1,1,1]; 
-t=get_containing_tetrahedron(pt,tetra_new);
+t=get_containing_tetrahedron(pt,tetra_new,t);
 if(t<1)
+t=1;
 Vmask(x,y,z)=10;
 continue;
 end;
@@ -306,11 +314,13 @@ nzmax=thickness*2+1;
 Vres=zeros(step,step,nzmax);
 
 %main cycle.
+t=1;
 for z=1:nzmax
 for y=1:step
 for x=1:step
-t=get_containing_tetrahedron([x,y,z],tetra_new);
+t=get_containing_tetrahedron([x,y,z],tetra_new,t);
 if(t<1)
+t=1;
 continue;
 end;
 
@@ -323,11 +333,36 @@ end;
 end;
 end;
 
-function[t]=get_containing_tetrahedron(x,tetra)
+function[t]=get_containing_tetrahedron(x,tetra,last_tetr)
+%global last_tetr;
 t=-1;
 ntetr=size(tetra,2);
+if (last_tetr>ntetr) last_tetr=1; end;
 for i=1:ntetr
-if(is_inside_tetrahedron(x,tetra(i))>0) t=i;return;end;
+k=i;
+if(i==1) k=last_tetr; end;
+if(i==last_tetr) k=1; end; 
+if(tetra(k).deg~=0) res=0; continue; end;
+res=1;
+for j=1:4
+if(x(1)*tetra(k).faces(1,j)+x(2)*tetra(k).faces(2,j)+x(3)*tetra(k).faces(3,j)+tetra(k).faces(4,j)<0)
+% if(ev_plane_eq(x,tetr.faces(:,i))<dscr)
+res=0; break;
+end;
+end; 
+if(res>0) t=k; return; end;
+% if(is_inside_tetrahedron(x,tetra(i))>0) t=i;return;end;
+end;
+
+function[res]=is_inside_tetrahedron(x,tetr)
+dscr=-1e-10;
+if(tetr.deg~=0) res=0; return; end;
+res=1;
+for i=1:4
+if(x(1)*tetr.faces(1,i)+x(2)*tetr.faces(2,i)+x(3)*tetr.faces(3,i)+tetr.faces(4,i)<0)
+% if(ev_plane_eq(x,tetr.faces(:,i))<dscr)
+res=0; return;
+end;
 end;
 
 function[tetra]=prism_partition(prism)
@@ -360,16 +395,20 @@ coefs(:,4)=rear;
 
 %equation sign checks.
 sgn=ones(1,4);
-if (ev_plane_eq(x4,base)<0)
+if(x4(1)*base(1)+x4(2)*base(2)+x4(3)*base(3)+base(4)<0)
+%if (ev_plane_eq(x4,base)<0)
 sgn(1)=-1;
 end;
-if (ev_plane_eq(x1,left)<0)
+if(x1(1)*left(1)+x1(2)*left(2)+x1(3)*left(3)+left(4)<0)
+%if (ev_plane_eq(x1,left)<0)
 sgn(2)=-1;
 end;
-if (ev_plane_eq(x3,right)<0)
+if(x3(1)*right(1)+x3(2)*right(2)+x3(3)*right(3)+right(4)<0)
+%if (ev_plane_eq(x3,right)<0)
 sgn(3)=-1;
 end;
-if(ev_plane_eq(x2,rear)<0)
+if(x2(1)*rear(1)+x2(2)*rear(2)+x2(3)*rear(3)+rear(4)<0)
+%if(ev_plane_eq(x2,rear)<0)
 sgn(4)=-1;
 end;
 for i=1:4
@@ -416,9 +455,25 @@ res.n=n;
 %res.vx=vx;res.vy=vy;res.vz=vz;
 %res.cx=cx;res.cy=cy;res.cz=cz;
 
+function[res]=ev_plane_eq(x,eq)
+res=eq(1)*x(1)+eq(2)*x(2)+eq(3)*x(3)+eq(4);
+
+function[xr]=atb_l(x,sz_l,sz_u,nDim)
+xr=x;
+for i=1:nDim
+if(x(i)<sz_l(i)) xr(i)=sz_l(i); end;
+if(x(i)>sz_u(i)) xr(i)=sz_u(i);end;
+end;
+
+function[xr]=atb(x,sz,nDim)
+xr=x;
+for i=1:nDim
+if(x(i)<1) xr(i)=1; end;
+if(x(i)>sz(i)) xr(i)=sz(i);end;
+end;
+
 %project point x on axis in tetrahedral coord system.
 function[r]=project_on_axis(xs,num,tetr)
-r=0;
 x=xs(1);y=xs(2);z=xs(3);
 if(num==1)
 n=tetr.n1;
@@ -458,35 +513,59 @@ zp=((-vz*y0+vz*y+vy*z0)*cy+(-x0*vz+vz*x+vx*z0)*cx+vz*cz*z)/dp;
 r=norm([xp-x0,yp-y0,zp-z0])/n;
 return;
 
-function[res]=ev_plane_eq(x,eq)
-res=eq(1)*x(1)+eq(2)*x(2)+eq(3)*x(3)+eq(4);
-
-function[res]=is_inside_tetrahedron(x,tetr)
-dscr=-1e-10;
-if(tetr.deg~=0) res=0; return; end;
-res=1;
-for i=1:4
-if(ev_plane_eq(x,tetr.faces(:,i))<dscr)
-res=0; return;
+function[x_dest]=coord_transform(xs,tetr,td)
+x=xs(1);y=xs(2);z=xs(3);
+x0=tetr.origin(1);y0=tetr.origin(2);z0=tetr.origin(3);
+%r1
+n=tetr.n1;
+dp=tetr.dp(1);
+if(tetr.dp(1)<=0) 
+r1=0; 
+else 
+vx=tetr.v1(1);
+vy=tetr.v1(2);
+vz=tetr.v1(3);
+cx=tetr.faces(1,2);
+cy=tetr.faces(2,2);
+cz=tetr.faces(3,2);
+xp=((vx*z+x0*vz-vx*z0)*cz+(vx*y+vy*x0-vx*y0)*cy+vx*cx*x)/dp;
+yp=((z*vy+vz*y0-vy*z0)*cz+(x*vy-vy*x0+vx*y0)*cx+cy*y*vy)/dp;
+zp=((-vz*y0+vz*y+vy*z0)*cy+(-x0*vz+vz*x+vx*z0)*cx+vz*cz*z)/dp;
+r1=norm([xp-x0,yp-y0,zp-z0])/n; 
+% r1=project_on_axis(x_src,1,ts);
 end;
+n=tetr.n2;
+dp=tetr.dp(2);
+if(tetr.dp(2)<=0) 
+r2=0;
+else 
+vx=tetr.v2(1);
+vy=tetr.v2(2);
+vz=tetr.v2(3);
+cx=tetr.faces(1,3);
+cy=tetr.faces(2,3);
+cz=tetr.faces(3,3);
+xp=((vx*z+x0*vz-vx*z0)*cz+(vx*y+vy*x0-vx*y0)*cy+vx*cx*x)/dp;
+yp=((z*vy+vz*y0-vy*z0)*cz+(x*vy-vy*x0+vx*y0)*cx+cy*y*vy)/dp;
+zp=((-vz*y0+vz*y+vy*z0)*cy+(-x0*vz+vz*x+vx*z0)*cx+vz*cz*z)/dp;
+r2=norm([xp-x0,yp-y0,zp-z0])/n; 
+% r2=project_on_axis(x_src,2,ts);
 end;
-
-function[xr]=atb_l(x,sz_l,sz_u,nDim)
-xr=x;
-for i=1:nDim
-if(x(i)<sz_l(i)) xr(i)=sz_l(i); end;
-if(x(i)>sz_u(i)) xr(i)=sz_u(i);end;
+n=tetr.n3;
+dp=tetr.dp(3);
+if(tetr.dp(3)<=0)
+r3=0;
+else
+vx=tetr.v3(1);
+vy=tetr.v3(2);
+vz=tetr.v3(3);
+cx=tetr.faces(1,1);
+cy=tetr.faces(2,1);
+cz=tetr.faces(3,1);
+xp=((vx*z+x0*vz-vx*z0)*cz+(vx*y+vy*x0-vx*y0)*cy+vx*cx*x)/dp;
+yp=((z*vy+vz*y0-vy*z0)*cz+(x*vy-vy*x0+vx*y0)*cx+cy*y*vy)/dp;
+zp=((-vz*y0+vz*y+vy*z0)*cy+(-x0*vz+vz*x+vx*z0)*cx+vz*cz*z)/dp;
+r3=norm([xp-x0,yp-y0,zp-z0])/n; 
+% r3=project_on_axis(x_src,3,ts);
 end;
-
-function[xr]=atb(x,sz,nDim)
-xr=x;
-for i=1:nDim
-if(x(i)<1) xr(i)=1; end;
-if(x(i)>sz(i)) xr(i)=sz(i);end;
-end;
-
-function[x_dest]=coord_transform(x_src,ts,td)
-r1=project_on_axis(x_src,1,ts);
-r2=project_on_axis(x_src,2,ts);
-r3=project_on_axis(x_src,3,ts);
 x_dest=td.origin+td.v1*r1+td.v2*r2+td.v3*r3;
