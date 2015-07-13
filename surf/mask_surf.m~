@@ -1,0 +1,117 @@
+% mask surface of the volume.
+%
+% [parameter] vertical: can be 'x', 'y', or 'z'. denotes the anterior-posterior axis.
+% [parameter] bg_thresh: integer threshold between object and background for generating
+% isosurface.
+% [parameter] inverse: if specified, direction of casting rays to generate
+% surface is from low to high coordinate (default is from high to low
+% coordinate of vertical axis).
+
+% Author: 	Mikhail Milchenko, mmilch@npg.wustl.edu, Washington University School of Medicine. 
+% Warranty:	No express or implied warranty, or fitness of this code for specific purpose is assumed. 
+% License:	You are free to use and re-distribute this code in any form, preserving the above notice.
+
+function[] = mask_surf(root, vertical, bg_thresh, inverse, method)
+%read original volume.
+avw=avw_img_read(root);
+V=avw.img;
+V=reorient(V,vertical,1,inverse);
+
+%get binary mask
+Mask=get_mask(V,bg_thresh);
+
+%morphologically close.
+se=strel('disk',2);
+Mask=imopen(Mask,se);
+
+%sz=size(V);
+
+%these are default settings for 1 mm anisotropic voxel.
+[thickness, step] = calc_step(avw.hdr.dime.pixdim(2:4), vertical);
+
+
+%calculate the volume mesh.
+[faces, vertices, faces_b, vertices_b, faces_t,vertices_t,...
+    lower_surf,upper_surf,orig_surf]=RectangularMesh(Mask,thickness,step,0.5);
+
+%display generated mesh.
+test_rect_mesh(faces, vertices, faces_b, vertices_b, faces_t,vertices_t);
+
+if(strcmp(method,'coating')~=0 || strcmp(method,'all')~=0)
+    Vmask=maskVol(V,lower_surf,orig_surf,upper_surf,step);
+    stats=get_seg_stats(V,Vmask,[1 2]);
+    m=stats(1,1);
+    Vrev=uint16(m*Vmask+(1-Vmask).*V);    
+    %return to original orientation.
+    Vrev=reorient(Vrev,vertical,-1,inverse);
+    save_vol(Vrev,avw,[root '_coating']);
+end;
+if(strcmp(method, 'blur')~=0 || strcmp(method,'all')~=0)
+    Vmask=maskVol(V,lower_surf,orig_surf,upper_surf,step);
+    Vbl=blur3(V,2*thickness);
+    Vrev=uint16(Vmask.*Vbl+(1-Vmask).*V);
+    %return to original orientation.
+    Vrev=reorient(Vrev,vertical,-1,inverse);
+    save_vol(Vrev,avw,[root '_blur']);
+end;
+if(strcmp(method, 'normfilter')~=0 || strcmp(method,'all')~=0)    
+    %project forward.
+    Vres=projectVol(V,V,orig_surf,lower_surf,upper_surf,thickness,step,'direct');
+    save_vol(Vres,avw,[root '_face']);
+    %mask volume.
+    V1=blur3_thin(Vres,thickness);
+    save_vol(uint16(V1),avw,[root '_face_blur']);
+    %project backward.
+    [Vrev,Vmask]=projectVol(V1,V,orig_surf,lower_surf,upper_surf,thickness,step,'reverse');
+    %return to original orientation.
+    Vrev=reorient(Vrev,vertical,-1,inverse);
+    save_vol(uint16(Vrev),avw,[root '_normfilter']);    
+end;
+
+Vmask=reorient(Vmask,vertical,-1,inverse);
+save_vol(Vmask,avw,[root '_msk']);
+
+function[Mask]=get_mask(V,bg_thresh)
+Mask=zeros(size(V));
+sz=size(V);
+for z=1:sz(3)
+    for y=1:sz(2)
+        for x=1:sz(1)
+            if(V(x,y,z)>=bg_thresh)
+                Mask(x,y,z)=1;
+            end;
+        end;
+    end;
+end;
+function[thickness,step]=calc_step(pixdim,axis)
+thickness=6;
+step=10;
+if(pixdim(1)<=0 || pixdim(2)<=0 || pixdim(3)<=0) return; end;
+diag=sqrt(p
+
+function[res]=reorient(V, vertical, dir, inverse)
+if(strcmp(vertical,'x'))
+   transp=[3 2 1];
+elseif(strcmp(vertical,'y'))
+   transp=[1 3 2];
+else 
+   transp=[1 2 3];
+end;
+
+if(dir==1) %forward
+    res=redim(V,transp);
+    if(inverse==1)
+        res=reflect(res,3);
+    end;
+else %back
+    res=redim(V,transp);
+    if(inverse==1)
+        if(strcmp(vertical,'x'))
+            res=reflect(res,1);
+        elseif(strcmp(vertical,'y'))
+            res=reflect(res,2);
+        else 
+            res=reflect(res,3);
+        end
+    end
+end;
