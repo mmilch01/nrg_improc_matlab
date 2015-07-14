@@ -62,8 +62,8 @@ if (params.snapshotOnly==0)
     %save ROI file. 
     save_ROI(params, strcat(params.roi_label,'.roi'));
 
-    snapshot(params.V0,params.pixdim,params.ver,params.inv,[params.root '_orig']);
-    snapshot3D(params.V0,params.pixdim,params.ver,params.inv,[params.root '_orig_surf']);
+ %   snapshot(params.V0,params.pixdim,params.ver,params.inv,[params.root '_orig']);
+ %   snapshot3D(params.V0,params.pixdim,params.ver,params.inv,[params.root '_orig_surf']);
 
     %run surface masking using the pre-calculated parameters.
     [R msg] = mask_surf(params);
