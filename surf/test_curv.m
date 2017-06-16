@@ -8,7 +8,7 @@ for i=1:nSessions
     [H(i).nf,H0(i).nf,S(i).nf]=getcurv([char(paths(i)) '/DEFACED/subvol_normfilter'],[char(paths(i)) '/DEFACED/subvol_msk']);
 end
 
-function[H,H0,S]=getcurv(fileV,fileMask)l
+function[H,H0,S]=getcurv(fileV,fileMask)
 avwV=avw_img_read(fileV);
 V=avwV.img;
 avwMsk=avw_img_read(fileMask);

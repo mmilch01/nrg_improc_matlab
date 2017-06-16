@@ -54,7 +54,7 @@ end;
     CR = [meanDiff + 1.96 * sdDiff, meanDiff - 1.96 * sdDiff]; %%95% confidence range
     
     [linFit S] = polyfit(means,diffs,1); %%%work out the linear fit coefficients
-    
+    linfit2=0;   rsq=0; Sa2=0;Sb2=0;
     %%%plot results unless flag is 0
     if flag ~= 0        
         f=figure('OuterPosition',[0,0,1200,568]);
