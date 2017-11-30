@@ -146,10 +146,13 @@ disp('computing boundary layer');
 disp ('saving the boundary layer');
 
 %show fiture only if display is available.
-ss=get(0,'ScreenSize');
-if(ss(3)>=100 || ss(4)>=100)    
-    test_rect_mesh(faces, vertices, faces_b, vertices_b, faces_t,vertices_t);
+if ~isdeployed
+    ss=get(0,'ScreenSize');
+    if(ss(3)>=100 || ss(4)>=100)    
+        test_rect_mesh(faces, vertices, faces_b, vertices_b, faces_t,vertices_t);
+    end;
 end;
+
 %print('-dpng',[ root '_mesh.png' ]);
 %close(f);
 %pause

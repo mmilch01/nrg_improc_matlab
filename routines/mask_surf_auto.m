@@ -14,6 +14,12 @@
 % save snapshots only.
 
 function[]=mask_surf_auto(root,varargin)
+if isdeployed
+    v1=convert_num_args(varargin);
+else
+    v1=varargin;
+end
+
 p=inputParser;
 %input image root name.
 p.addRequired('root',@ischar);
@@ -51,7 +57,7 @@ p.addParamValue('roi_label',[],@ischar);
 %Option to only output 3D snapshot.
 p.addParamValue('snapshotOnly',[],@(x)isnumeric(x));
 
-p.parse(root,varargin{:});
+p.parse(root,v1{:});
 disp('Input arguments:'); p.Results
 %initialize parameters.
 [params msg]=init_params(p);
@@ -367,3 +373,17 @@ if( a1/a > .5)
 else
     Vm=V;
 end;
+
+function [out]=convert_num_args(v)
+numargs={'thresh','grain','optimization','p_out','p_in','vertical','normal','snapshotOnly'};
+sz=size(v,2)
+for i=1:sz
+    for j=1:size(numargs,2)
+        if strcmp(v(i),numargs(j))==1
+            m=str2num(char(v(i+1))); sm=size(m);
+            v(i+1)=mat2cell(m,sm(1),sm(2));
+            i=i+1;
+        end
+    end    
+end
+out=v;
