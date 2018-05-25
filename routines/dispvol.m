@@ -7,7 +7,11 @@ if ~exist('M','var')
     M=[]
 end
 if isempty(M)
-    M=prctile(V(:),98);
+    if size(unique(V(:)),1)>99
+        M=prctile(V(:),98);
+    else
+        M=max(V(:));
+    end
 else
     colormap(hot(256));
     for i=1:numel(V)
@@ -72,3 +76,6 @@ for i=1:nIm
 %    imshow(V(:,:,slice),[m M]),title(['slice ' num2str(slice)]);
 end;
 colorbar;
+
+function num_greylevels(V)
+
